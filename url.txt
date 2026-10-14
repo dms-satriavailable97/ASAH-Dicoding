@@ -1,1 +1,1 @@
-Dashboard Streamlit Cloud: (isi dengan tautan setelah deploy, contoh: https://nama-app-kamu.streamlit.app)
+Dashboard Streamlit Cloud: https://asah-dicoding-wzwbg25ikcqsvcjbbgd5a7.streamlit.app/

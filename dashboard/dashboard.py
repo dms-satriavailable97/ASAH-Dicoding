@@ -30,7 +30,7 @@ def load_data():
 hour_df, day_df = load_data()
 
 # ---------------- Sidebar (filter) ----------------
-st.sidebar.header(" Filter Data")
+st.sidebar.header("Filter Data")
 min_d, max_d = day_df["dteday"].min().date(), day_df["dteday"].max().date()
 date_range = st.sidebar.date_input("Rentang tanggal", (min_d, max_d), min_value=min_d, max_value=max_d)
 if isinstance(date_range, tuple) and len(date_range) == 2:
@@ -38,21 +38,24 @@ if isinstance(date_range, tuple) and len(date_range) == 2:
 else:
     start, end = pd.to_datetime(min_d), pd.to_datetime(max_d)
 
-seasons = st.sidebar.multiselect("Musim", SEASON_ORDER, default=SEASON_ORDER)
-weathers = st.sidebar.multiselect("Kondisi cuaca", WEATHER_ORDER[:3], default=WEATHER_ORDER[:3],
-                                  help="Cuaca 'lebat' hanya muncul 3 jam sepanjang data sehingga tidak disertakan.")
+season_sel = st.sidebar.selectbox("Musim", ["Semua Musim"] + SEASON_ORDER)
+weather_sel = st.sidebar.selectbox("Kondisi cuaca", ["Semua Cuaca"] + WEATHER_ORDER[:3])
 st.sidebar.caption("Sumber: Capital Bikeshare, Washington D.C. (2011–2012)")
 
 
 def apply(df):
-    m = (df["dteday"].between(start, end)) & df["season_lbl"].isin(seasons) & df["weather_lbl"].isin(weathers)
+    m = df["dteday"].between(start, end)
+    if season_sel != "Semua Musim":
+        m &= df["season_lbl"] == season_sel
+    if weather_sel != "Semua Cuaca":
+        m &= df["weather_lbl"] == weather_sel
     return df[m]
 
 
 hour_f, day_f = apply(hour_df), apply(day_df)
 
 # ---------------- Header ----------------
-st.title(" Dashboard Analisis Bike Sharing")
+st.title("Dashboard Analisis Bike Sharing")
 st.markdown("Pola penyewaan sepeda berdasarkan **jam**, **cuaca/musim/suhu**, dan **pertumbuhan tahunan**.")
 
 if day_f.empty:
@@ -67,16 +70,16 @@ c2.metric("Rata-rata per hari", f"{day_f['cnt'].mean():,.0f}")
 c3.metric("Pengguna registered", f"{day_f['registered'].sum() / total:.0%}")
 c4.metric("Pengguna casual", f"{day_f['casual'].sum() / total:.0%}")
 
-tab1, tab2, tab3, tab4 = st.tabs([" Pola Jam", " Cuaca, Musim & Suhu", " Pertumbuhan", " Analisis Lanjutan"])
+tab1, tab2, tab3, tab4 = st.tabs(["Pola Jam", "Cuaca, Musim & Suhu", "Pertumbuhan", "Analisis Lanjutan"])
 
 # ---------------- Tab 1 ----------------
 with tab1:
-    st.subheader("Pada jam berapa penyewaan memuncak: hari kerja vs akhir pekan/libur?")
+    st.subheader("Pertanyaan 1: Pada jam berapa rata-rata penyewaan sepeda per jam mencapai puncak tertinggi pada hari kerja dibandingkan akhir pekan/libur selama periode 2011–2012?")
     hourly = hour_f.groupby(["day_type", "hr"])["cnt"].mean().reset_index()
     if hourly.empty:
         st.info("Data per jam kosong untuk filter ini.")
     else:
-        fig, ax = plt.subplots(figsize=(10, 4.6))
+        fig, ax = plt.subplots(figsize=(7.5, 3.6))
         colors = {"Hari Kerja": BLUE, "Akhir Pekan/Libur": ORANGE}
         for t, g in hourly.groupby("day_type"):
             ax.plot(g["hr"], g["cnt"], color=colors[t], lw=2.5, marker="o", ms=4, label=t)
@@ -89,7 +92,7 @@ with tab1:
         ax.set_ylim(0, hourly["cnt"].max() * 1.2)
         ax.legend(frameon=False, loc="upper left")
         ax.set_title("Rata-rata penyewaan per jam", loc="left")
-        st.pyplot(fig)
+        st.pyplot(fig, use_container_width=False)
 
         col_a, col_b = st.columns(2)
         with col_a:
@@ -111,12 +114,12 @@ with tab1:
 
 # ---------------- Tab 2 ----------------
 with tab2:
-    st.subheader("Berapa persen penurunan penyewaan harian saat hujan/salju ringan dibanding cerah? (didukung analisis musim & suhu)")
+    st.subheader("Pertanyaan 2: Berapa persen penurunan rata-rata penyewaan harian saat cuaca hujan/salju ringan dibandingkan cuaca cerah selama periode 2011–2012?")
     w = day_f.groupby("weather_lbl")["cnt"].mean().reindex(WEATHER_ORDER[:3]).dropna()
     s = day_f.groupby("season_lbl")["cnt"].mean().reindex(SEASON_ORDER).dropna()
     t = day_f.groupby("temp_category", observed=True)["cnt"].mean().reindex(TEMP_ORDER).dropna()
 
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4.6), sharey=True)
+    fig, axes = plt.subplots(1, 3, figsize=(11, 3.6), sharey=True)
     for ax, ser, title in zip(axes, [w, s, t], ["Kondisi cuaca", "Musim", "Kategori suhu"]):
         cols = [ORANGE if v == ser.max() else GREY for v in ser]
         bars = ax.bar([str(i).replace(" (", "\n(").replace("/", "/\n") if title == "Kondisi cuaca" else str(i).replace(" (", "\n(") for i in ser.index], ser.values, color=cols)
@@ -126,13 +129,13 @@ with tab2:
         ax.yaxis.set_major_formatter(mtick.FuncFormatter(lambda x, _: f"{x:,.0f}"))
     axes[0].set_ylabel("Rata-rata penyewaan harian")
     plt.tight_layout()
-    st.pyplot(fig)
+    st.pyplot(fig, use_container_width=False)
 
     if "Cerah" in w.index and "Hujan/Salju Ringan" in w.index:
         drop = (w["Hujan/Salju Ringan"] / w["Cerah"] - 1) * 100
         st.metric("Penurunan saat hujan/salju ringan vs cerah", f"{drop:.0f}%")
 
-    fig2, ax2 = plt.subplots(figsize=(8, 4.6))
+    fig2, ax2 = plt.subplots(figsize=(6, 3.6))
     cmap = {"Cerah": BLUE, "Berkabut/Berawan": GREY, "Hujan/Salju Ringan": ORANGE}
     for lbl, g in day_f.groupby("weather_lbl"):
         ax2.scatter(g["temp_c"], g["cnt"], s=22, alpha=.65, color=cmap.get(lbl, "black"), label=lbl)
@@ -143,22 +146,22 @@ with tab2:
         ax2.text(0.03, 0.95, f"r = {day_f['temp_c'].corr(day_f['cnt']):.2f}", transform=ax2.transAxes, fontweight="bold")
     ax2.set_xlabel("Suhu (°C)"); ax2.set_ylabel("Penyewaan harian"); ax2.legend(frameon=False, loc="lower right")
     ax2.set_title("Suhu vs penyewaan harian", loc="left")
-    st.pyplot(fig2)
+    st.pyplot(fig2, use_container_width=False)
 
     st.info("**Insight:** cuaca hujan/salju ringan menurunkan penyewaan ±63%; musim gugur dan suhu 20–30°C tertinggi. "
             "**Aksi:** sesuaikan jumlah armada dengan prakiraan cuaca dan siapkan kapasitas ekstra untuk musim gugur.")
 
 # ---------------- Tab 3 ----------------
 with tab3:
-    st.subheader("Berapa persen pertumbuhan total penyewaan 2012 dibanding 2011?")
+    st.subheader("Pertanyaan 3: Berapa persen pertumbuhan total penyewaan sepeda tahun 2012 dibandingkan tahun 2011 (Year-over-Year)?")
     monthly = day_f.pivot_table(index="mnth", columns="year", values="cnt", aggfunc="sum").reindex(range(1, 13))
-    fig, ax = plt.subplots(figsize=(10, 4.6))
+    fig, ax = plt.subplots(figsize=(7.5, 3.6))
     if 2011 in monthly: ax.plot(MONTHS, monthly[2011], color=GREY, lw=2.5, marker="o", label="2011")
     if 2012 in monthly: ax.plot(MONTHS, monthly[2012], color=BLUE, lw=2.5, marker="o", label="2012")
     ax.yaxis.set_major_formatter(mtick.FuncFormatter(lambda x, _: f"{x/1000:.0f} rb"))
     ax.set_ylabel("Total penyewaan per bulan"); ax.set_ylim(0); ax.legend(frameon=False)
     ax.set_title("Total penyewaan bulanan", loc="left")
-    st.pyplot(fig)
+    st.pyplot(fig, use_container_width=False)
 
     if {2011, 2012}.issubset(monthly.columns) and monthly[[2011, 2012]].notna().all(axis=None):
         yoy = (monthly[2012] / monthly[2011] - 1) * 100
@@ -166,11 +169,11 @@ with tab3:
         a, b = st.columns(2)
         a.metric("Pertumbuhan total 2012 vs 2011", f"{(tot[2012] / tot[2011] - 1) * 100:.1f}%")
         b.metric("Bulan puncak 2012", MONTHS[int(monthly[2012].idxmax()) - 1])
-        fig, ax = plt.subplots(figsize=(10, 3.6))
+        fig, ax = plt.subplots(figsize=(7.5, 3))
         ax.bar(MONTHS, yoy, color=[ORANGE if v == yoy.min() else BLUE for v in yoy])
         for i, v in enumerate(yoy): ax.text(i, v + 3, f"{v:.0f}%", ha="center", fontsize=8.5)
         ax.set_ylabel("YoY (%)"); ax.set_title("Pertumbuhan YoY per bulan", loc="left")
-        st.pyplot(fig)
+        st.pyplot(fig, use_container_width=False)
     else:
         st.info("Pilih rentang tanggal yang mencakup 2011 dan 2012 (dan bulan yang sama) untuk melihat pertumbuhan YoY.")
 
@@ -185,11 +188,11 @@ with tab4:
     d = day_f[day_f["weather_lbl"].isin(WEATHER_ORDER[:3])].assign(high=lambda x: (x["demand_level"] == "Tinggi").astype(int))
     heat = (d.pivot_table(index="weather_lbl", columns="temp_category", values="high", aggfunc="mean", observed=True)
               .mul(100).reindex(index=WEATHER_ORDER[:3], columns=TEMP_ORDER))
-    fig, ax = plt.subplots(figsize=(8, 3.6))
+    fig, ax = plt.subplots(figsize=(6.5, 3))
     sns.heatmap(heat, annot=True, fmt=".0f", cmap="Blues", linewidths=.5, ax=ax,
                 cbar_kws={"label": "% hari berpermintaan Tinggi"}, annot_kws={"fontweight": "bold"})
     ax.set_xlabel(""); ax.set_ylabel("")
-    st.pyplot(fig)
+    st.pyplot(fig, use_container_width=False)
     st.caption("Sel kosong = tidak ada hari pada kombinasi tersebut dalam filter terpilih. "
                "Kombinasi dengan jumlah hari sedikit (mis. cuaca hujan) sebaiknya dibaca hati-hati.")
 
